@@ -336,10 +336,15 @@
     var todayIso = state.todayIso;
     var draft = existing ? JSON.parse(JSON.stringify(existing)) : {
       id: null, category:'class', title:'', professor:'', room:'',
-      activity:'', location:'', startTime:'09:00', endTime:'10:00',
-      days:['Mon'], weekType:'both', isOneTime:false, date: todayIso,
+      activity:'', location:'', weekType:'both', isOneTime:false, date: todayIso,
       notes:'', color: CATS.class.defaultColor
     };
+    // Internal editing model: one or more {days[], startTime, endTime} slots.
+    // Creating a new item can hold several slots (added all at once); editing
+    // an existing item always maps to exactly one slot (one database row).
+    draft.slots = existing
+      ? [{ days: existing.days.slice(), startTime: existing.startTime, endTime: existing.endTime }]
+      : [{ days: ['Mon'], startTime: '09:00', endTime: '10:00' }];
 
     var html = ''+
     '<div class="modal-overlay" id="overlay">'+
@@ -358,10 +363,6 @@
             '</div>'+
           '</div>'+
           '<div id="dynamicFields"></div>'+
-          '<div class="field-row">'+
-            '<div class="field"><label>Start time</label><input type="time" id="fStart" value="'+draft.startTime+'"></div>'+
-            '<div class="field"><label>End time</label><input type="time" id="fEnd" value="'+draft.endTime+'"></div>'+
-          '</div>'+
           '<div class="field" id="freqField">'+
             '<label>Frequency</label>'+
             '<div class="freq-toggle" id="freqToggle">'+
@@ -369,24 +370,7 @@
               '<button type="button" data-f="once" class="'+(draft.isOneTime?'active':'')+'">One-time date</button>'+
             '</div>'+
           '</div>'+
-          '<div class="field" id="dateField">'+
-            '<label>Date</label>'+
-            '<input type="date" id="fDate" value="'+(draft.date||todayIso)+'">'+
-          '</div>'+
-          '<div class="field" id="daysField">'+
-            '<label>Days</label>'+
-            '<div class="day-picker" id="dayPicker">'+
-              DAYS.map(function(d){ return '<button type="button" class="day-chip'+(draft.days.includes(d)?' active':'')+'" data-day="'+d+'">'+d+'</button>'; }).join('')+
-            '</div>'+
-          '</div>'+
-          '<div class="field" id="weekField">'+
-            '<label>Applies to</label>'+
-            '<div class="week-scope" id="weekScope">'+
-              ['both','A','B'].map(function(w){
-                return '<button type="button" data-w="'+w+'" class="'+(draft.weekType===w?'active':'')+'">'+(w==='both'?'Every week':'Week '+w)+'</button>';
-              }).join('')+
-            '</div>'+
-          '</div>'+
+          '<div id="scheduleFields"></div>'+
           '<div class="field">'+
             '<label>Color</label>'+
             '<div class="color-picker" id="colorPicker">'+
@@ -428,25 +412,111 @@
           '<div class="field"><label>Event title</label><input type="text" id="fTitle" value="'+escapeHtml(draft.title||'')+'" placeholder="e.g. Study Group"></div>'+
           '<div class="field" style="margin-top:12px;"><label>Location</label><input type="text" id="fLoc" value="'+escapeHtml(draft.location||'')+'" placeholder="e.g. Library, 2nd floor"></div>';
       }
-      toggleFreqVisibility();
+      updateFreqFieldVisibility();
     }
 
-    function toggleFreqVisibility(){
+    function updateFreqFieldVisibility(){
       var freqField = document.getElementById('freqField');
-      var dateField = document.getElementById('dateField');
-      var daysField = document.getElementById('daysField');
-      var weekField = document.getElementById('weekField');
       if(draft.category==='event'){
         freqField.classList.remove('hidden');
-        if(draft.isOneTime){
-          dateField.classList.remove('hidden'); daysField.classList.add('hidden'); weekField.classList.add('hidden');
-        } else {
-          dateField.classList.add('hidden'); daysField.classList.remove('hidden'); weekField.classList.remove('hidden');
-        }
       } else {
-        freqField.classList.add('hidden'); dateField.classList.add('hidden');
-        daysField.classList.remove('hidden'); weekField.classList.remove('hidden');
+        freqField.classList.add('hidden');
+        draft.isOneTime = false;
       }
+      renderScheduleFields();
+    }
+
+    function renderSlotRow(slot, index, showRemove){
+      return '<div class="slot-row" data-idx="'+index+'">'+
+        (showRemove ? '<button type="button" class="icon-btn slot-remove" data-remove="'+index+'" title="Remove this time slot">'+window.icon('x',13)+'</button>' : '')+
+        '<div class="day-picker slot-day-picker" data-idx="'+index+'">'+
+          DAYS.map(function(d){ return '<button type="button" class="day-chip'+(slot.days.includes(d)?' active':'')+'" data-day="'+d+'">'+d+'</button>'; }).join('')+
+        '</div>'+
+        '<div class="field-row">'+
+          '<div class="field"><label>Start</label><input type="time" class="slot-start" data-idx="'+index+'" value="'+slot.startTime+'"></div>'+
+          '<div class="field"><label>End</label><input type="time" class="slot-end" data-idx="'+index+'" value="'+slot.endTime+'"></div>'+
+        '</div>'+
+      '</div>';
+    }
+
+    function renderScheduleFields(){
+      var el = document.getElementById('scheduleFields');
+      if(draft.category==='event' && draft.isOneTime){
+        var only = draft.slots[0];
+        el.innerHTML = ''+
+          '<div class="field"><label>Date</label><input type="date" id="fDate" value="'+(draft.date||todayIso)+'"></div>'+
+          '<div class="field-row" style="margin-top:12px;">'+
+            '<div class="field"><label>Start time</label><input type="time" id="fStart" value="'+only.startTime+'"></div>'+
+            '<div class="field"><label>End time</label><input type="time" id="fEnd" value="'+only.endTime+'"></div>'+
+          '</div>';
+        window.paintIcons(el);
+        return;
+      }
+
+      if(draft.slots[0].days.length===0) draft.slots[0].days = ['Mon'];
+
+      el.innerHTML = ''+
+        '<div class="field">'+
+          '<label>'+(draft.slots.length>1?'Time slots':'Days & time')+'</label>'+
+          '<div class="slots-wrap" id="slotsWrap">'+
+            draft.slots.map(function(slot, i){ return renderSlotRow(slot, i, !isEdit && draft.slots.length>1); }).join('')+
+          '</div>'+
+          (!isEdit ? '<button type="button" class="btn btn-sm" id="addSlotBtn" style="margin-top:10px;">'+window.icon('plus',13)+' Add another time slot</button>' : '')+
+          (!isEdit ? '<div class="field-hint" style="margin-top:6px;">Meeting at a different time on other days? Add a separate time slot — everything gets added to your routine together.</div>' : '')+
+        '</div>'+
+        '<div class="field" style="margin-top:14px;">'+
+          '<label>Applies to</label>'+
+          '<div class="week-scope" id="weekScope">'+
+            ['both','A','B'].map(function(w){
+              return '<button type="button" data-w="'+w+'" class="'+(draft.weekType===w?'active':'')+'">'+(w==='both'?'Every week':'Week '+w)+'</button>';
+            }).join('')+
+          '</div>'+
+        '</div>';
+
+      window.paintIcons(el);
+      wireSlotEvents();
+
+      document.getElementById('weekScope').querySelectorAll('button').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          draft.weekType = btn.dataset.w;
+          document.getElementById('weekScope').querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b===btn); });
+        });
+      });
+
+      var addBtn = document.getElementById('addSlotBtn');
+      if(addBtn){
+        addBtn.addEventListener('click', function(){
+          draft.slots.push({ days: ['Mon'], startTime: '09:00', endTime: '10:00' });
+          renderScheduleFields();
+        });
+      }
+    }
+
+    function wireSlotEvents(){
+      document.querySelectorAll('.slot-day-picker').forEach(function(picker){
+        var idx = +picker.dataset.idx;
+        picker.querySelectorAll('.day-chip').forEach(function(chip){
+          chip.addEventListener('click', function(){
+            var d = chip.dataset.day;
+            var days = draft.slots[idx].days;
+            if(days.includes(d)) draft.slots[idx].days = days.filter(function(x){return x!==d;});
+            else days.push(d);
+            chip.classList.toggle('active');
+          });
+        });
+      });
+      document.querySelectorAll('.slot-start').forEach(function(inp){
+        inp.addEventListener('change', function(){ draft.slots[+inp.dataset.idx].startTime = inp.value; });
+      });
+      document.querySelectorAll('.slot-end').forEach(function(inp){
+        inp.addEventListener('change', function(){ draft.slots[+inp.dataset.idx].endTime = inp.value; });
+      });
+      document.querySelectorAll('.slot-remove').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          draft.slots.splice(+btn.dataset.remove, 1);
+          renderScheduleFields();
+        });
+      });
     }
 
     renderDynamicFields();
@@ -465,21 +535,7 @@
       btn.addEventListener('click', function(){
         draft.isOneTime = btn.dataset.f === 'once';
         document.getElementById('freqToggle').querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b===btn); });
-        toggleFreqVisibility();
-      });
-    });
-    document.getElementById('dayPicker').querySelectorAll('.day-chip').forEach(function(chip){
-      chip.addEventListener('click', function(){
-        var d = chip.dataset.day;
-        if(draft.days.includes(d)) draft.days = draft.days.filter(function(x){return x!==d;});
-        else draft.days.push(d);
-        chip.classList.toggle('active');
-      });
-    });
-    document.getElementById('weekScope').querySelectorAll('button').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        draft.weekType = btn.dataset.w;
-        document.getElementById('weekScope').querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b===btn); });
+        renderScheduleFields();
       });
     });
     document.getElementById('colorPicker').querySelectorAll('.color-dot').forEach(function(dot){
@@ -507,10 +563,6 @@
     }
 
     document.getElementById('saveBtn').addEventListener('click', function(){
-      draft.startTime = document.getElementById('fStart').value || draft.startTime;
-      draft.endTime = document.getElementById('fEnd').value || draft.endTime;
-      if(draft.endTime <= draft.startTime){ showToast('End time must be after start time', true); return; }
-
       if(draft.category==='class'){
         draft.title = document.getElementById('fTitle').value.trim();
         draft.professor = document.getElementById('fProf').value.trim();
@@ -525,25 +577,65 @@
         draft.title = document.getElementById('fTitle').value.trim();
         draft.location = document.getElementById('fLoc').value.trim();
         if(!draft.title){ showToast('Event title is required', true); return; }
-        if(draft.isOneTime) draft.date = document.getElementById('fDate').value || todayIso;
-      }
-      if(!(draft.category==='event' && draft.isOneTime) && draft.days.length===0){
-        showToast('Pick at least one day', true); return;
       }
 
-      var payload = {
+      var shared = {
         category: draft.category, title: draft.title, professor: draft.professor, room: draft.room,
-        activity: draft.activity, location: draft.location, startTime: draft.startTime, endTime: draft.endTime,
-        isOneTime: draft.isOneTime, date: draft.date, days: draft.days, weekType: draft.weekType,
-        notes: draft.notes, color: draft.color
+        activity: draft.activity, location: draft.location, notes: draft.notes, color: draft.color
       };
 
-      var req = isEdit
-        ? api(CFG.urls.eventDetail+draft.id, {method:'PUT', body: JSON.stringify(payload)})
-        : api(CFG.urls.events, {method:'POST', body: JSON.stringify(payload)});
+      // One-time dated event: always a single record, no multi-slot support.
+      if(draft.category==='event' && draft.isOneTime){
+        var date = document.getElementById('fDate').value || todayIso;
+        var start = document.getElementById('fStart').value;
+        var end = document.getElementById('fEnd').value;
+        if(!start || !end || end<=start){ showToast('End time must be after start time', true); return; }
+        var onePayload = Object.assign({}, shared, {
+          startTime:start, endTime:end, isOneTime:true, date:date, days:[], weekType:'both'
+        });
+        var oneReq = isEdit
+          ? api(CFG.urls.eventDetail+draft.id, {method:'PUT', body: JSON.stringify(onePayload)})
+          : api(CFG.urls.events, {method:'POST', body: JSON.stringify(onePayload)});
+        oneReq.then(function(){ window.location.reload(); }).catch(function(e){ showToast(String(e), true); });
+        return;
+      }
 
-      req.then(function(){ window.location.reload(); })
-         .catch(function(e){ showToast(String(e), true); });
+      // Sync each slot's times straight from its inputs so we save exactly what's on screen.
+      document.querySelectorAll('.slot-start').forEach(function(inp){ draft.slots[+inp.dataset.idx].startTime = inp.value; });
+      document.querySelectorAll('.slot-end').forEach(function(inp){ draft.slots[+inp.dataset.idx].endTime = inp.value; });
+
+      for(var i=0;i<draft.slots.length;i++){
+        var slot = draft.slots[i];
+        var label = draft.slots.length>1 ? ' in time slot '+(i+1) : '';
+        if(slot.days.length===0){ showToast('Pick at least one day'+label, true); return; }
+        if(!slot.startTime || !slot.endTime || slot.endTime<=slot.startTime){ showToast('End time must be after start time'+label, true); return; }
+      }
+
+      if(isEdit){
+        var slot0 = draft.slots[0];
+        var editPayload = Object.assign({}, shared, {
+          startTime:slot0.startTime, endTime:slot0.endTime, isOneTime:false, date:null,
+          days:slot0.days, weekType:draft.weekType
+        });
+        api(CFG.urls.eventDetail+draft.id, {method:'PUT', body: JSON.stringify(editPayload)})
+          .then(function(){ window.location.reload(); })
+          .catch(function(e){ showToast(String(e), true); });
+        return;
+      }
+
+      var payloads = draft.slots.map(function(slot){
+        return Object.assign({}, shared, {
+          startTime:slot.startTime, endTime:slot.endTime, isOneTime:false, date:null,
+          days:slot.days, weekType:draft.weekType
+        });
+      });
+
+      Promise.all(payloads.map(function(p){ return api(CFG.urls.events, {method:'POST', body: JSON.stringify(p)}); }))
+        .then(function(){
+          showToast(payloads.length>1 ? 'Added '+payloads.length+' time slots to your routine' : 'Added to your routine');
+          window.location.reload();
+        })
+        .catch(function(e){ showToast(String(e), true); });
     });
   }
 
