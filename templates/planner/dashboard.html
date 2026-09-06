@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Routine{% endblock %}
+{% block body %}
+<div class="app">
+  <header class="header">
+    <div class="brand">
+      <div class="brand-mark" data-icon="calendar-clock"></div>
+      <div>
+        <div class="brand-name">Routine</div>
+        <div class="brand-sub" id="todayLabel">—</div>
+      </div>
+    </div>
+
+    <div class="week-nav">
+      <button class="icon-btn" id="prevWeekBtn" title="Previous week" data-icon="chevron-left"></button>
+      <span class="week-range font-mono" id="weekRangeLabel">{{ range_label }}</span>
+      <button class="icon-btn" id="nextWeekBtn" title="Next week" data-icon="chevron-right"></button>
+      {% if not is_current_week %}
+        <button class="btn btn-sm" id="todayBtn">Today</button>
+      {% endif %}
+    </div>
+
+    <div class="week-toggle" id="weekToggle" data-week="{{ week_type }}">
+      <div class="pill"></div>
+      <button data-week="A" type="button">Week A</button>
+      <button data-week="B" type="button">Week B</button>
+    </div>
+
+    <div class="header-spacer"></div>
+
+    <button class="icon-btn" id="hoursBtn" title="Adjust visible hours" data-icon="clock-4"></button>
+    <button class="icon-btn" id="themeBtn" title="Toggle theme" data-icon="moon"></button>
+    <button class="btn btn-primary" id="addEventBtn"><span data-icon="plus"></span> Add Event</button>
+    <a class="icon-btn" href="{% url 'accounts:logout' %}" title="Sign out" data-icon="log-out"></a>
+  </header>
+
+  <div class="layout">
+    <div class="main-col">
+      <div class="override-note" id="overrideNote" style="margin-bottom:8px;"></div>
+      <div class="grid-wrap">
+        <div class="grid-scroll-inner">
+          <div class="grid-head-row" id="gridHeadRow"></div>
+          <div class="grid-body" id="gridBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col">
+      <div class="card">
+        <div class="card-head"><span data-icon="list-checks"></span><h2>Next up today</h2></div>
+        <div class="card-body">
+          <div class="timeline" id="nextUpList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span data-icon="notebook-pen"></span><h2>Scratchpad</h2></div>
+        <div class="card-body">
+          <div id="taskList"></div>
+          <div class="task-input-row">
+            <input class="field-input" id="taskInput" type="text" placeholder="Add a reminder…" maxlength="280">
+            <button class="btn btn-sm" id="taskAddBtn"><span data-icon="plus"></span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span data-icon="database"></span><h2>Data</h2></div>
+        <div class="card-body" style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-sm" id="exportBtn"><span data-icon="download"></span> Export</button>
+          <button class="btn btn-sm" id="importBtn"><span data-icon="upload"></span> Import</button>
+          <button class="btn btn-sm btn-danger" id="clearBtn"><span data-icon="trash-2"></span> Clear all</button>
+          <input type="file" id="importFile" accept="application/json" class="hidden">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+{{ initial_data|json_script:"initial-data" }}
+<script>
+  window.ROUTINE_CONFIG = {
+    csrfToken: "{{ csrf_token }}",
+    weekMonday: "{{ monday|date:'Y-m-d' }}",
+    weekAAnchor: "{{ profile.week_a_anchor|date:'Y-m-d' }}",
+    urls: {
+      week: "{% url 'planner:week' %}",
+      events: "{% url 'planner:api_events' %}",
+      eventDetail: "{% url 'planner:api_event_detail' pk=999999 %}".replace('999999', ''),
+      tasks: "{% url 'planner:api_tasks' %}",
+      taskDetail: "{% url 'planner:api_task_detail' pk=999999 %}".replace('999999', ''),
+      weekOverride: "{% url 'planner:api_week_override' %}",
+      settings: "{% url 'planner:api_settings' %}",
+      export: "{% url 'planner:api_export' %}",
+      import: "{% url 'planner:api_import' %}",
+      clearAll: "{% url 'planner:api_clear_all' %}"
+    }
+  };
+</script>
+<script src="{% static 'js/app.js' %}"></script>
+{% endblock %}

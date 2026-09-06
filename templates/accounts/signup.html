@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Create account — Routine{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark" data-icon="calendar-clock"></div>
+      <span class="brand-name">Routine</span>
+    </div>
+    <h1 class="auth-title">Create your account</h1>
+    <p class="auth-sub">Your classes, gym slots and events, synced everywhere you sign in.</p>
+
+    <form class="auth-form" method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="field-error">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="field">
+        <label for="{{ form.username.id_for_label }}">Username</label>
+        {{ form.username }}
+        {% for e in form.username.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ form.password1.id_for_label }}">Password</label>
+        {{ form.password1 }}
+        {% for e in form.password1.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ form.password2.id_for_label }}">Confirm password</label>
+        {{ form.password2 }}
+        {% for e in form.password2.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Create account</button>
+    </form>
+
+    <p class="auth-foot">Already have an account? <a href="{% url 'accounts:login' %}">Sign in</a></p>
+  </div>
+</div>
+{% endblock %}
